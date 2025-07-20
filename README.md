@@ -2,13 +2,18 @@
 
 A powerful trading signal pipeline that leverages the Gemini cryptocurrency exchange API to analyze market data and generate trading signals.
 
-## Features
+## 🎥 Video Demo
+
+Check out the [video demonstration](./components/video/20250721_001958.mp4) to see the application in action.
+
+## ✨ Features
 
 - Real-time market data analysis
 - Automated trading signal generation
 - Support for multiple trading pairs
 - Customizable trading strategies
 - Performance metrics and analytics
+- Interactive dashboard with visualizations
 
 ## Prerequisites
 
@@ -36,14 +41,29 @@ A powerful trading signal pipeline that leverages the Gemini cryptocurrency exch
    GEMINI_API_SECRET=your_api_secret_here
    ```
 
-## Usage
+## 🚀 Usage
 
-1. Start the application:
+1. Start the development server:
    ```bash
-   npm start
+   npm run dev
    ```
 
 2. Access the dashboard at `http://localhost:3000`
+
+3. For production build:
+   ```bash
+   npm run build
+   npm start
+   ```
+
+## 🎮 Video Component
+
+The application includes a video demonstration component that showcases the main features and functionality. The video is located at `components/video/20250721_001958.mp4`.
+
+To use the video in your application:
+1. Reference it in your React components
+2. The video demonstrates key workflows and features
+3. It's included in the project for reference and demonstration purposes
 
 ## Contributing
 
