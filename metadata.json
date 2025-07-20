@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Copy of Gemini Trading Signal Pipeline",
+  "description": "A dashboard application that visualizes a real-time, AI-driven trading signal pipeline. It demonstrates how Gemini's vision and reasoning capabilities can be used to analyze market charts, generate trade signals, check for compliance, and execute trades.",
+  "requestFramePermissions": []
+}
