@@ -6,7 +6,7 @@ A powerful trading signal pipeline that leverages the Gemini cryptocurrency exch
 
 Watch the [full video demonstration on Google Drive](https://drive.google.com/file/d/1fKlt7luBomqQWI_MITbQc7pytcchNo81/view?usp=sharing) to see the application in action.
 
-[![Watch the video](https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg)](https://drive.google.com/file/d/1fKlt7luBomqQWI_MITbQc7pytcchNo81/view?usp=sharing)
+[![Watch the video](https://drive.google.com/file/d/187KH-XpeSd-XF5ko8pgFFYiCxMEF-5fS/view?usp=sharing)](https://drive.google.com/file/d/1fKlt7luBomqQWI_MITbQc7pytcchNo81/view?usp=sharing)
 
 ## ✨ Features
 
