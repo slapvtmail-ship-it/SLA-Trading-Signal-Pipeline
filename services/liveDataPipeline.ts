@@ -81,6 +81,12 @@ class LiveDataPipeline {
     const symbols = configManager.getSymbols();
     symbols.forEach(symbol => {
       marketDataService.subscribe(symbol, (data) => {
+        console.log(`📊 Received market data for ${symbol}:`, {
+          price: data.tick.price,
+          change24h: data.tick.change24h,
+          volume: data.tick.volume,
+          timestamp: data.tick.timestamp
+        });
         this.handleMarketDataUpdate(symbol, data);
       });
     });
@@ -115,6 +121,7 @@ class LiveDataPipeline {
       });
       
       console.log('🚀 Live Data Pipeline started successfully');
+      console.log('📊 Pipeline will check for signals every time market data is received');
       
     } catch (error) {
       this.isRunning = false;
@@ -193,8 +200,18 @@ class LiveDataPipeline {
     const startTime = Date.now();
     
     try {
+      console.log(`🔄 Processing symbol: ${symbol}`);
       const marketData = marketDataService.getCurrentData(symbol);
-      if (!marketData) return;
+      if (!marketData) {
+        console.log(`⚠️ No market data available for ${symbol}`);
+        return;
+      }
+
+      console.log(`📊 Market data for ${symbol}:`, {
+        price: marketData.tick.price,
+        change24h: marketData.tick.change24h,
+        volume: marketData.tick.volume
+      });
 
       // Check if signal generation is needed
       if (this.shouldGenerateSignal(symbol, marketData)) {
@@ -223,28 +240,52 @@ class LiveDataPipeline {
    */
   private shouldGenerateSignal(symbol: string, data: LiveMarketData): boolean {
     // Check various conditions for signal generation
+    const volatilityCondition = this.checkVolatilityCondition(data);
+    const technicalCondition = this.checkTechnicalCondition(data);
+    const sentimentCondition = this.checkSentimentCondition(data);
+    const timeCondition = this.checkTimeCondition(symbol);
+    
     const conditions = [
-      this.checkVolatilityCondition(data),
-      this.checkTechnicalCondition(data),
-      this.checkSentimentCondition(data),
-      this.checkTimeCondition(symbol)
+      volatilityCondition,
+      technicalCondition,
+      sentimentCondition,
+      timeCondition
     ];
 
-    // Generate signal if at least 2 conditions are met
-    return conditions.filter(Boolean).length >= 2;
+    const metConditions = conditions.filter(Boolean).length;
+    const shouldGenerate = metConditions >= 1; // Reduced from 2 to 1 for easier signal generation
+
+    // Debug logging
+    console.log(`🔍 Signal check for ${symbol}:`, {
+      volatility: volatilityCondition,
+      technical: technicalCondition,
+      sentiment: sentimentCondition,
+      time: timeCondition,
+      metConditions,
+      shouldGenerate,
+      price: data.tick.price,
+      change24h: data.tick.change24h,
+      rsi: data.technicals.rsi,
+      sentimentScore: data.sentiment.score
+    });
+
+    return shouldGenerate;
   }
 
   private checkVolatilityCondition(data: LiveMarketData): boolean {
-    return Math.abs(data.tick.change24h) > 3; // 3% change
+    // More lenient volatility condition - 1% change instead of 3%
+    return Math.abs(data.tick.change24h) > 1;
   }
 
   private checkTechnicalCondition(data: LiveMarketData): boolean {
     const { rsi, macd } = data.technicals;
-    return (rsi < 30 || rsi > 70) || (macd.macd > macd.signal);
+    // More lenient technical conditions
+    return (rsi < 40 || rsi > 60) || (macd.macd !== macd.signal);
   }
 
   private checkSentimentCondition(data: LiveMarketData): boolean {
-    return Math.abs(data.sentiment.score) > 0.5 && data.sentiment.confidence > 0.7;
+    // More lenient sentiment condition
+    return Math.abs(data.sentiment.score) > 0.3 && data.sentiment.confidence > 0.5;
   }
 
   private checkTimeCondition(symbol: string): boolean {
@@ -255,7 +296,8 @@ class LiveDataPipeline {
     if (!lastSignal) return true;
     
     const timeSinceLastSignal = Date.now() - new Date(lastSignal.timestamp).getTime();
-    return timeSinceLastSignal > 300000; // 5 minutes
+    // Reduced time condition from 5 minutes to 30 seconds for testing
+    return timeSinceLastSignal > 30000;
   }
 
   /**
@@ -263,6 +305,13 @@ class LiveDataPipeline {
    */
   private async generateSignal(symbol: string, marketData: LiveMarketData): Promise<void> {
     try {
+      console.log(`🎯 Generating signal for ${symbol} with market data:`, {
+        price: marketData.tick.price,
+        change24h: marketData.tick.change24h,
+        volume: marketData.tick.volume,
+        rsi: marketData.technicals.rsi
+      });
+      
       // Capture chart for analysis
       const chartData = await this.captureChartForAnalysis(symbol);
       
@@ -281,7 +330,19 @@ class LiveDataPipeline {
         data: signal
       });
       
-      console.log(`📊 Generated signal for ${symbol}: ${signal.direction} at ${signal.entryPrice}`);
+      console.log(`✅ Signal generated for ${symbol}:`, {
+        id: signal.id,
+        direction: signal.direction,
+        confidence: signal.confidence,
+        entryPrice: signal.entryPrice,
+        stopLoss: signal.stopLoss,
+        takeProfit: signal.takeProfit,
+        riskScore: signal.riskScore,
+        signalStrength: signal.signalStrength
+      });
+      
+      // Also log the signal to make it visible in the console
+      console.log(`📊 SIGNAL DETAILS for ${symbol}:`, signal);
       
     } catch (error) {
       console.error(`❌ Failed to generate signal for ${symbol}:`, error);
@@ -297,10 +358,59 @@ class LiveDataPipeline {
       // Sanitize symbol for DOM ID (same as VisionPanel)
       const sanitizedSymbol = symbol.replace(/[^a-zA-Z0-9]/g, '-');
       const elementId = `tradingview-chart-${sanitizedSymbol}`;
+      
+      // Check if element exists before attempting capture
+      const element = document.getElementById(elementId);
+      if (!element) {
+        console.warn(`⚠️ Chart element ${elementId} not found, skipping chart capture for ${symbol}`);
+        return null;
+      }
+
+      // Wait for chart to have content before capturing
+      console.log(`📊 Waiting for chart content to load for ${symbol} (element: ${elementId})`);
+      let attempts = 0;
+      const maxAttempts = 30; // 15 seconds max wait
+      
+      while (attempts < maxAttempts) {
+        const hasContent = element.children.length > 0;
+        const hasCanvas = element.querySelector('canvas');
+        const hasSvg = element.querySelector('svg');
+        const hasChartContent = element.querySelector('.live-price, .tv-symbol-price-quote__value');
+        const hasVisibleContent = element.offsetWidth > 0 && element.offsetHeight > 0;
+        
+        if ((hasContent && (hasCanvas || hasSvg || hasChartContent)) && hasVisibleContent) {
+          console.log(`✅ Chart content ready for ${symbol}, proceeding with capture`);
+          break;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      
+      if (attempts >= maxAttempts) {
+        console.warn(`⚠️ Chart content not ready after ${maxAttempts * 500}ms for ${symbol}, attempting capture anyway`);
+      }
+      
+      console.log(`📊 Attempting chart capture for ${symbol} (element: ${elementId})`);
       const result = await chartCaptureService.captureChart(elementId, symbol);
+      
+      if (result) {
+        console.log(`✅ Chart captured successfully for ${symbol}`);
+        console.log(`📊 Chart data:`, {
+          symbol: result.symbol,
+          timestamp: result.timestamp,
+          hasImage: !!result.capturedImage,
+          imageSize: result.capturedImage ? result.capturedImage.length : 0,
+          marketData: result.marketData,
+          technicalIndicators: result.technicalIndicators
+        });
+      } else {
+        console.warn(`⚠️ Chart capture returned null for ${symbol}`);
+      }
+      
       return result;
     } catch (error) {
-      console.warn(`⚠️ Chart capture failed for ${symbol}, using market data only`);
+      console.warn(`⚠️ Chart capture failed for ${symbol}, using market data only:`, error);
       return null;
     }
   }

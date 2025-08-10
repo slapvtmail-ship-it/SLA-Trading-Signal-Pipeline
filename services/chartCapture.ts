@@ -132,8 +132,18 @@ export class ChartCaptureService {
         const tvWidget = element.querySelector('[data-widget-type="chart"]');
         const hasContent = element.children.length > 0;
         const hasCanvas = element.querySelector('canvas');
+        const hasSvg = element.querySelector('svg');
+        const hasChartContent = element.querySelector('.live-price, .tv-symbol-price-quote__value');
         
-        if ((tvWidget || hasCanvas || hasContent) || (Date.now() - startTime > maxWait)) {
+        // More comprehensive check for chart readiness
+        const isReady = (tvWidget || hasCanvas || hasSvg || hasChartContent) && hasContent;
+        
+        if (isReady || (Date.now() - startTime > maxWait)) {
+          if (isReady) {
+            console.log(`✅ Chart content detected and ready for capture`);
+          } else {
+            console.warn(`⚠️ Chart load timeout after ${maxWait}ms, proceeding with capture`);
+          }
           resolve();
         } else {
           setTimeout(checkLoad, 100);

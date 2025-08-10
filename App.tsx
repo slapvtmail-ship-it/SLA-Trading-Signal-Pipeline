@@ -42,20 +42,27 @@ const App: React.FC = () => {
   useEffect(() => {
     const initializePipeline = async () => {
       try {
+        console.log('🚀 App: Initializing live data pipeline...');
+        
         // Start the live data pipeline
         await liveDataPipeline.startPipeline();
+        console.log('✅ App: Live data pipeline started successfully');
         
         // Subscribe to pipeline events
         const unsubscribe = liveDataPipeline.addEventListener((event) => {
+          console.log('📡 App: Pipeline event received:', event.type, event.data);
           if (event.type === 'SIGNAL_GENERATED') {
             const signal = event.data as PipelineSignal;
+            console.log('🎯 App: Converting pipeline signal to trade signal:', signal);
             convertPipelineSignalToTradeSignal(signal);
             setPipelineSignals(prev => [signal, ...prev].slice(0, 10));
+            console.log('✅ App: Signal converted and state updated');
           }
         });
 
         // Subscribe to market data for current symbol
         const marketUnsubscribe = marketDataService.subscribe(currentSymbol, (data) => {
+          console.log('📊 App: Market data received for', currentSymbol, data.tick.price);
           setMarketData(data);
         });
 
@@ -65,10 +72,11 @@ const App: React.FC = () => {
           liveDataPipeline.stopPipeline();
         };
       } catch (error) {
-        console.error('Failed to initialize pipeline:', error);
+        console.error('❌ App: Failed to initialize pipeline:', error);
       }
     };
 
+    console.log('🔧 App: Starting pipeline initialization...');
     initializePipeline();
   }, []);
 
@@ -107,6 +115,8 @@ const App: React.FC = () => {
 
   // Convert pipeline signal to trade signal format
   const convertPipelineSignalToTradeSignal = useCallback((pipelineSignal: PipelineSignal) => {
+    console.log('🔄 App: Converting pipeline signal:', pipelineSignal);
+    
     const tradeSignal: TradeSignal = {
       id: pipelineSignal.id,
       symbol: pipelineSignal.symbol,
@@ -121,9 +131,13 @@ const App: React.FC = () => {
       confidence: pipelineSignal.confidence
     };
     
+    console.log('📊 App: Created trade signal:', tradeSignal);
+    
     setCurrentSignal(tradeSignal);
     setSignalStatus(SignalStatus.ANALYZING);
     setIsProcessing(true);
+    
+    console.log('✅ App: Signal state updated, starting compliance check in 1.5s');
     
     // Trigger compliance check
     setTimeout(() => {

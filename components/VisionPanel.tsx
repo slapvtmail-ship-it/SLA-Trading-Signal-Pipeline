@@ -77,20 +77,20 @@ export const VisionPanel: React.FC<VisionPanelProps> = ({
 
   // Initialize TradingView widget
   const initializeTradingViewWidget = useCallback(() => {
-    if (!configManager.isTradingViewEnabled() || useFallback) return;
+    if (!chartContainerRef.current || useFallback) return;
 
     try {
-      // Clear existing widget container
+      // Clear existing content
       const container = document.getElementById(containerId);
       if (container) {
         container.innerHTML = '';
       }
 
-      // @ts-ignore - TradingView widget global
-      if (typeof TradingView !== 'undefined') {
-        console.log(`📊 Initializing TradingView widget for ${currentSymbol}`);
-        // @ts-ignore
-        new TradingView.widget({
+      // Check if TradingView is available
+      if (typeof window !== 'undefined' && (window as any).TradingView) {
+        console.log(`🔄 Initializing TradingView widget for ${currentSymbol}`);
+        
+        new (window as any).TradingView.widget({
           autosize: true,
           symbol: currentSymbol,
           interval: "5",
@@ -104,9 +104,20 @@ export const VisionPanel: React.FC<VisionPanelProps> = ({
           hide_legend: true,
           save_image: false,
           container_id: containerId,
-          crossOrigin: 'anonymous'
+          crossOrigin: 'anonymous',
+          onChartReady: () => {
+            console.log(`✅ TradingView chart ready for ${currentSymbol}`);
+            setTradingViewLoaded(true);
+            
+            // Wait a bit more for the chart to fully render
+            setTimeout(() => {
+              console.log(`📊 Chart fully loaded for ${currentSymbol}, ready for capture`);
+            }, 2000);
+          }
         });
-        setTradingViewLoaded(true);
+      } else {
+        console.warn('TradingView not available, using fallback');
+        setUseFallback(true);
       }
     } catch (error) {
       console.error('TradingView widget initialization failed:', error);
@@ -197,26 +208,63 @@ export const VisionPanel: React.FC<VisionPanelProps> = ({
   const captureChart = useCallback(async () => {
     if (isCapturing) return;
     
+    console.log(`🎯 Starting chart capture for ${currentSymbol}`);
     setIsCapturing(true);
+    
     try {
+      // Check if we should use fallback or TradingView
+      const container = document.getElementById(containerId);
+      if (!container) {
+        console.error(`❌ Container ${containerId} not found`);
+        return;
+      }
+
+      // Wait for chart to be ready
+      if (!useFallback && !tradingViewLoaded) {
+        console.log(`⏳ Waiting for TradingView to load for ${currentSymbol}`);
+        // Wait up to 10 seconds for TradingView to load
+        let attempts = 0;
+        while (!tradingViewLoaded && attempts < 20) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          attempts++;
+        }
+        
+        if (!tradingViewLoaded) {
+          console.warn(`⚠️ TradingView failed to load, switching to fallback for ${currentSymbol}`);
+          setUseFallback(true);
+        }
+      }
+
+      // Additional wait for chart content to render
+      if (!useFallback) {
+        console.log(`⏳ Waiting for chart content to render for ${currentSymbol}`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+
+      console.log(`📸 Capturing chart for ${currentSymbol} (fallback: ${useFallback})`);
       const chartData = await chartCaptureService.captureChart(containerId, currentSymbol);
       
       if (chartData) {
         setLastCaptureTime(new Date().toLocaleTimeString());
         onChartCaptured?.(chartData);
+        console.log(`✅ Chart captured successfully for ${currentSymbol}`);
 
         // Analyze with Gemini Vision if enabled
         if (configManager.isLiveDataEnabled()) {
+          console.log(`🔍 Starting Gemini analysis for ${currentSymbol}`);
           const analysis = await geminiVisionService.analyzeChart(chartData.capturedImage, currentSymbol);
           onAnalysisComplete?.(analysis);
+          console.log(`✅ Gemini analysis completed for ${currentSymbol}`);
         }
+      } else {
+        console.warn(`⚠️ Chart capture returned null for ${currentSymbol}`);
       }
     } catch (error) {
-      console.error('Chart capture failed:', error);
+      console.error(`❌ Chart capture failed for ${currentSymbol}:`, error);
     } finally {
       setIsCapturing(false);
     }
-  }, [containerId, currentSymbol, isCapturing, onChartCaptured, onAnalysisComplete]);
+  }, [containerId, currentSymbol, isCapturing, onChartCaptured, onAnalysisComplete, useFallback, tradingViewLoaded]);
 
   // Auto-capture based on configuration
   useEffect(() => {
@@ -340,10 +388,38 @@ export const VisionPanel: React.FC<VisionPanelProps> = ({
                   <div className="text-center">
                     <div className="w-8 h-8 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                     <p className="text-slate-400">Loading TradingView Chart...</p>
+                    <p className="text-xs text-slate-500 mt-1">Symbol: {currentSymbol}</p>
                   </div>
                 )}
               </div>
             )}
+          </div>
+          
+          {/* Chart Status Indicator */}
+          <div className="absolute top-2 left-2">
+            <div className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-medium ${
+              useFallback 
+                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' 
+                : tradingViewLoaded 
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${
+                useFallback 
+                  ? 'bg-yellow-400' 
+                  : tradingViewLoaded 
+                    ? 'bg-green-400'
+                    : 'bg-blue-400 animate-pulse'
+              }`}></div>
+              <span>
+                {useFallback 
+                  ? 'Fallback Chart' 
+                  : tradingViewLoaded 
+                    ? 'TradingView Ready'
+                    : 'Loading Chart...'
+                }
+              </span>
+            </div>
           </div>
           
           {/* Capture Controls */}
@@ -364,7 +440,12 @@ export const VisionPanel: React.FC<VisionPanelProps> = ({
           
           {(isProcessing || isCapturing) && (
             <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center rounded-md transition-opacity duration-300">
-              <div className="w-8 h-8 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+              <div className="text-center">
+                <div className="w-8 h-8 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                <p className="text-cyan-400 text-sm">
+                  {isCapturing ? 'Capturing Chart...' : 'Processing...'}
+                </p>
+              </div>
             </div>
           )}
         </div>

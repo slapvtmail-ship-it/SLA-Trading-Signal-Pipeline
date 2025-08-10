@@ -389,11 +389,14 @@ class MarketDataService {
    * Subscribe to real-time data for a symbol
    */
   subscribe(symbol: string, callback: (data: LiveMarketData) => void): () => void {
+    console.log(`🔔 MarketDataService: New subscription for ${symbol}`);
+    
     if (!this.subscribers.has(symbol)) {
       this.subscribers.set(symbol, []);
     }
     
     this.subscribers.get(symbol)!.push(callback);
+    console.log(`📊 MarketDataService: Total subscribers for ${symbol}: ${this.subscribers.get(symbol)!.length}`);
     
     // Send current data immediately
     const currentData = this.dataCache.get(symbol);
@@ -419,6 +422,7 @@ class MarketDataService {
   private notifySubscribers(symbol: string, data: LiveMarketData): void {
     const callbacks = this.subscribers.get(symbol);
     if (callbacks) {
+      console.log(`📤 MarketDataService: Notifying ${callbacks.length} subscribers for ${symbol} with price ${data.tick.price}`);
       callbacks.forEach(callback => {
         try {
           callback(data);
@@ -426,6 +430,8 @@ class MarketDataService {
           console.error('Error in market data callback:', error);
         }
       });
+    } else {
+      console.log(`⚠️ MarketDataService: No subscribers found for ${symbol}`);
     }
   }
 
