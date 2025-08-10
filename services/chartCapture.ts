@@ -162,20 +162,22 @@ export class ChartCaptureService {
     const priceElement = element.querySelector('.live-price, .tv-symbol-price-quote__value');
     const changeElement = element.querySelector('.live-change, .tv-symbol-price-quote__change');
     
-    // Get base price for the symbol
-    const basePrice = this.getBasePrice(symbol);
+    // Get live market data from market data service
+    const marketData = (window as any).marketDataService?.getCurrentData(symbol);
+    const defaultPrice = marketData?.tick.price || 100;
+    
     const currentPrice = priceElement?.textContent ? 
-      parseFloat(priceElement.textContent.replace(/[^0-9.-]/g, '')) : basePrice;
+      parseFloat(priceElement.textContent.replace(/[^0-9.-]/g, '')) : defaultPrice;
     
     const change24h = changeElement?.textContent ? 
-      parseFloat(changeElement.textContent.replace(/[^0-9.-]/g, '')) : 0;
+      parseFloat(changeElement.textContent.replace(/[^0-9.-]/g, '')) : (marketData?.tick.change24h || 0);
 
     return {
       currentPrice,
       change24h,
-      volume24h: Math.random() * 1000000, // Simulated for demo
-      high24h: currentPrice * 1.05,
-      low24h: currentPrice * 0.95
+      volume24h: marketData?.tick.volume || Math.random() * 1000000,
+      high24h: marketData?.tick.high24h || currentPrice * 1.05,
+      low24h: marketData?.tick.low24h || currentPrice * 0.95
     };
   }
 
@@ -194,27 +196,7 @@ export class ChartCaptureService {
     };
   }
 
-  /**
-   * Get base price for symbol
-   */
-  private getBasePrice(symbol: string): number {
-    const prices: Record<string, number> = {
-      'BTC/USD': 67000,
-      'BTCUSDT': 67000,
-      'BINANCE:BTCUSDT': 67000,
-      'ETH/USD': 3400,
-      'ETHUSDT': 3400,
-      'BINANCE:ETHUSDT': 3400,
-      'SOL/USD': 155,
-      'SOLUSDT': 155,
-      'BINANCE:SOLUSDT': 155,
-      'ADA/USD': 0.45,
-      'ADAUSDT': 0.45,
-      'BINANCE:ADAUSDT': 0.45
-    };
-    
-    return prices[symbol] || 100;
-  }
+  // getBasePrice function removed - using live market data only
 
   /**
    * Sanitize symbol for use in DOM IDs

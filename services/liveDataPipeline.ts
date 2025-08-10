@@ -255,21 +255,70 @@ class LiveDataPipeline {
     const metConditions = conditions.filter(Boolean).length;
     const shouldGenerate = metConditions >= 1; // Reduced from 2 to 1 for easier signal generation
 
-    // Debug logging
-    console.log(`🔍 Signal check for ${symbol}:`, {
-      volatility: volatilityCondition,
-      technical: technicalCondition,
-      sentiment: sentimentCondition,
-      time: timeCondition,
-      metConditions,
-      shouldGenerate,
-      price: data.tick.price,
-      change24h: data.tick.change24h,
-      rsi: data.technicals.rsi,
-      sentimentScore: data.sentiment.score
+    // Enhanced debug logging
+    console.log(`🔍 DETAILED Signal check for ${symbol}:`, {
+      volatility: {
+        condition: volatilityCondition,
+        change24h: data.tick.change24h,
+        threshold: '> 1%',
+        actual: `${Math.abs(data.tick.change24h).toFixed(2)}%`
+      },
+      technical: {
+        condition: technicalCondition,
+        rsi: data.technicals.rsi,
+        rsiCondition: `RSI < 40 (${data.technicals.rsi < 40}) or RSI > 60 (${data.technicals.rsi > 60})`,
+        macd: data.technicals.macd,
+        macdCondition: `MACD ≠ Signal (${data.technicals.macd.macd !== data.technicals.macd.signal})`
+      },
+      sentiment: {
+        condition: sentimentCondition,
+        score: data.sentiment.score,
+        confidence: data.sentiment.confidence,
+        scoreCondition: `|${data.sentiment.score}| > 0.3 = ${Math.abs(data.sentiment.score) > 0.3}`,
+        confidenceCondition: `${data.sentiment.confidence} > 0.5 = ${data.sentiment.confidence > 0.5}`
+      },
+      time: {
+        condition: timeCondition,
+        lastSignalTime: this.getLastSignalTime(symbol),
+        timeSinceLastSignal: this.getTimeSinceLastSignal(symbol)
+      },
+      summary: {
+        metConditions,
+        requiredConditions: 1,
+        shouldGenerate,
+        price: data.tick.price,
+        volume: data.tick.volume
+      }
     });
 
+    // Force generate a signal every 30 seconds for testing if no conditions are met
+    if (!shouldGenerate) {
+      const timeSinceLastForce = this.getTimeSinceLastSignal(symbol);
+      if (timeSinceLastForce > 30000) { // 30 seconds
+        console.log(`🚀 FORCE GENERATING signal for ${symbol} - no conditions met but 30s elapsed`);
+        return true;
+      }
+    }
+
     return shouldGenerate;
+  }
+
+  private getLastSignalTime(symbol: string): string | null {
+    const lastSignal = Array.from(this.signals.values())
+      .filter(s => s.symbol === symbol)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+    
+    return lastSignal ? lastSignal.timestamp : null;
+  }
+
+  private getTimeSinceLastSignal(symbol: string): number {
+    const lastSignal = Array.from(this.signals.values())
+      .filter(s => s.symbol === symbol)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+    
+    if (!lastSignal) return Infinity;
+    
+    return Date.now() - new Date(lastSignal.timestamp).getTime();
   }
 
   private checkVolatilityCondition(data: LiveMarketData): boolean {

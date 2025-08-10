@@ -148,8 +148,9 @@ export class GeminiVisionService {
       const takeProfitMatch = analysisText.match(/take[-\s]*profit[:\s]*\$?([0-9,]+\.?[0-9]*)/i);
       const confidenceMatch = analysisText.match(/confidence[:\s]*([0-9]+)%?/i);
 
-      // Default values based on symbol
-      const basePrice = this.getBasePrice(symbol);
+      // Get live market data for default values
+      const marketData = (window as any).marketDataService?.getCurrentData(symbol);
+      const basePrice = marketData?.tick.price || 100;
       
       // Parse and validate numeric values
       const entry = this.parsePrice(entryMatch?.[1], basePrice);
@@ -178,7 +179,9 @@ export class GeminiVisionService {
    * Get fallback analysis when API fails
    */
   private getFallbackAnalysis(symbol: string): GeminiAnalysisResponse {
-    const basePrice = this.getBasePrice(symbol);
+    // Get live market data for fallback values
+    const marketData = (window as any).marketDataService?.getCurrentData(symbol);
+    const basePrice = marketData?.tick.price || 100;
     
     return {
       extractedData: `Fallback analysis for ${symbol}. API temporarily unavailable. Using technical indicators from chart patterns.`,
@@ -201,21 +204,7 @@ export class GeminiVisionService {
     }
   }
 
-  private getBasePrice(symbol: string): number {
-    // Approximate current prices for major symbols
-    const prices: Record<string, number> = {
-      'BTC/USD': 67000,
-      'BTCUSDT': 67000,
-      'ETH/USD': 3400,
-      'ETHUSDT': 3400,
-      'SOL/USD': 155,
-      'SOLUSDT': 155,
-      'ADA/USD': 0.45,
-      'ADAUSDT': 0.45
-    };
-    
-    return prices[symbol] || prices[symbol.replace('BINANCE:', '')] || 100;
-  }
+  // getBasePrice function removed - using live market data only
 
   private extractReasoning(text: string): string {
     // Extract reasoning section from the analysis

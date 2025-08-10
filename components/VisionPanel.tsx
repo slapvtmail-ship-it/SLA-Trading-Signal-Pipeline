@@ -4,6 +4,7 @@ import { SectionCard } from './SectionCard';
 import { EyeIcon } from './icons/EyeIcon';
 import { chartCaptureService } from '../services/chartCapture';
 import { geminiVisionService } from '../services/geminiVision';
+import { marketDataService } from '../services/marketDataService';
 import configManager from '../config';
 import type { LiveChartData, GeminiAnalysisResponse } from '../types';
 
@@ -163,45 +164,36 @@ export const VisionPanel: React.FC<VisionPanelProps> = ({
     }
   }, [currentSymbol, initializeTradingViewWidget, useFallback]);
 
-  // Live price simulation
+  // Live price from market data service
   useEffect(() => {
-    const getBasePrice = (sym: string) => {
-      const prices: Record<string, number> = {
-        'BINANCE:BTCUSDT': 67000,
-        'BINANCE:ETHUSDT': 3400,
-        'BINANCE:SOLUSDT': 155,
-        'BINANCE:ADAUSDT': 0.45,
-        'BINANCE:BNBUSDT': 580,
-        'BINANCE:XRPUSDT': 0.52
-      };
-      return prices[sym] || prices[sym.replace('BINANCE:', '')] || 100;
-    };
+    // Get initial live data
+    const marketData = marketDataService.getCurrentData(currentSymbol);
+    if (marketData) {
+      setLivePrice(marketData.tick.price);
+      setPriceChange(marketData.tick.change24h);
+    }
 
-    const basePrice = getBasePrice(currentSymbol);
-    setLivePrice(basePrice);
-
-    const interval = setInterval(() => {
-      const variation = (Math.random() - 0.5) * 0.02; // ±1% variation
-      const newPrice = basePrice * (1 + variation);
-      const change = ((newPrice - basePrice) / basePrice) * 100;
-      
-      setLivePrice(newPrice);
-      setPriceChange(change);
+    // Subscribe to live updates
+    const unsubscribe = marketDataService.subscribe(currentSymbol, (data) => {
+      setLivePrice(data.tick.price);
+      setPriceChange(data.tick.change24h);
 
       // Update DOM elements directly for live updates
       const priceElement = document.querySelector(`#${containerId} .live-price`);
       const changeElement = document.querySelector(`#${containerId} .live-change`);
       
       if (priceElement) {
-        priceElement.textContent = `$${newPrice.toFixed(2)}`;
+        priceElement.textContent = `$${data.tick.price.toFixed(2)}`;
       }
       if (changeElement) {
-        changeElement.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
-        changeElement.className = `live-change ${change >= 0 ? 'text-green-400' : 'text-red-400'}`;
+        changeElement.textContent = `${data.tick.change24h >= 0 ? '+' : ''}${data.tick.change24h.toFixed(2)}%`;
+        changeElement.className = `live-change ${data.tick.change24h >= 0 ? 'text-green-400' : 'text-red-400'}`;
       }
-    }, 3000);
+    });
 
-    return () => clearInterval(interval);
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [currentSymbol, containerId]);
 
   // Chart capture functionality

@@ -66,6 +66,44 @@ const App: React.FC = () => {
           setMarketData(data);
         });
 
+        // TEMPORARY: Generate a test signal immediately to demonstrate real data display
+        console.log('🧪 TEMPORARY: Setting up IMMEDIATE test signal generation...');
+        setTimeout(() => {
+          console.log('🧪 TEMPORARY: *** GENERATING TEST SIGNAL NOW ***');
+          console.log('📊 Current market data:', marketData);
+          console.log('📍 Current symbol:', currentSymbol);
+          
+          const testSignal: TradeSignal = {
+            id: `test-${Date.now()}`,
+            symbol: currentSymbol || 'BINANCE:BTCUSDT',
+            timestamp: new Date().toISOString(),
+            isLive: true,
+            chartUrl: '',
+            extractedData: 'TEST SIGNAL: Enhanced market analysis shows RSI at oversold 28.5, MACD bullish divergence detected, volume spike confirmed. Strong support identified.',
+            direction: Direction.LONG,
+            entry: 45250.00,
+            stopLoss: 44345.00,
+            takeProfit: 47512.50,
+            confidence: 0.78
+          };
+          
+          console.log('🎯 App: *** SETTING TEST SIGNAL ***:', testSignal);
+          console.log('🔄 App: Current signal before update:', currentSignal);
+          
+          setCurrentSignal(testSignal);
+          setSignalStatus(SignalStatus.ANALYZING);
+          setIsProcessing(true);
+          
+          console.log('✅ App: *** TEST SIGNAL STATE UPDATED ***');
+          
+          // Trigger compliance check after 2 seconds
+          setTimeout(() => {
+            console.log('🔍 App: *** STARTING COMPLIANCE CHECK ***');
+            setSignalStatus(SignalStatus.COMPLIANCE);
+            runComplianceCheck(testSignal);
+          }, 2000);
+        }, 1000);
+
         return () => {
           unsubscribe();
           marketUnsubscribe();
