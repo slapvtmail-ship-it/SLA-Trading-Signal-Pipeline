@@ -35,23 +35,23 @@ class ConfigManager {
   private loadConfig(): AppConfig {
     return {
       gemini: {
-        apiKey: process.env.GEMINI_API_KEY || '',
-        enabled: !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'your_gemini_api_key_here'
+        apiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
+        enabled: !!import.meta.env.VITE_GEMINI_API_KEY && import.meta.env.VITE_GEMINI_API_KEY !== 'your_gemini_api_key_here'
       },
       tradingView: {
-        enabled: process.env.TRADINGVIEW_WIDGET_API === 'true',
+        enabled: import.meta.env.VITE_TRADINGVIEW_WIDGET_API === 'true',
         widgetApi: true
       },
       chartCapture: {
-        interval: parseInt(process.env.CHART_CAPTURE_INTERVAL || '30000'),
-        analysisInterval: parseInt(process.env.CHART_ANALYSIS_INTERVAL || '45000'),
+        interval: parseInt(import.meta.env.VITE_CHART_CAPTURE_INTERVAL || '30000'),
+        analysisInterval: parseInt(import.meta.env.VITE_CHART_ANALYSIS_INTERVAL || '45000'),
         quality: 0.9,
         format: 'png'
       },
       liveData: {
-        enabled: process.env.ENABLE_LIVE_DATA === 'true',
-        symbolRotationInterval: parseInt(process.env.SYMBOL_ROTATION_INTERVAL || '60000'),
-        maxApiCallsPerMinute: parseInt(process.env.MAX_API_CALLS_PER_MINUTE || '10')
+        enabled: import.meta.env.VITE_ENABLE_LIVE_DATA === 'true',
+        symbolRotationInterval: parseInt(import.meta.env.VITE_SYMBOL_ROTATION_INTERVAL || '60000'),
+        maxApiCallsPerMinute: parseInt(import.meta.env.VITE_MAX_API_CALLS_PER_MINUTE || '10')
       },
       symbols: [
         'BINANCE:BTCUSDT',
@@ -94,6 +94,14 @@ class ConfigManager {
 
   getMaxApiCallsPerMinute(): number {
     return this.config.liveData.maxApiCallsPerMinute;
+  }
+
+  getGeminiApiKey(): string {
+    return this.config.gemini.apiKey;
+  }
+
+  isGeminiEnabled(): boolean {
+    return this.config.gemini.enabled;
   }
 
   updateConfig(updates: Partial<AppConfig>): void {

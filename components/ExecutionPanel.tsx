@@ -25,7 +25,7 @@ const KPICard: React.FC<{ label: string; value: string; color: string }> = ({ la
 export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({ 
   trades, 
   currentSignalStatus, 
-  isConnected = false, 
+  isConnected: _isConnected = false, 
   latency = 85,
   currentSignal,
   realTimeData,

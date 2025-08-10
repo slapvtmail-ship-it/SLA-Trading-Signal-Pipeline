@@ -9,7 +9,7 @@ import { ArchitecturePanel } from './components/ArchitecturePanel';
 import { EvolutionPanel } from './components/EvolutionPanel';
 import { mockSignals, mockComplianceRules, mockTrades, mockPerformanceData } from './constants';
 import type { TradeSignal, Trade, ComplianceRule, LiveChartData, GeminiAnalysisResponse } from './types';
-import { SignalStatus, ComplianceStatus, Direction } from './types';
+import { SignalStatus, ComplianceStatus } from './types';
 import configManager from './config';
 
 const App: React.FC = () => {
@@ -23,11 +23,11 @@ const App: React.FC = () => {
   const [currentSymbol, setCurrentSymbol] = useState<string>('BTCUSD');
   const [isLiveMode, setIsLiveMode] = useState<boolean>(false);
   const [lastChartCapture, setLastChartCapture] = useState<LiveChartData | null>(null);
-  const [liveSignals, setLiveSignals] = useState<TradeSignal[]>([]);
+  const [_liveSignals, setLiveSignals] = useState<TradeSignal[]>([]);
   
   // Symbol rotation for live mode
   const symbols = ['BTCUSD', 'ETHUSD', 'ADAUSD', 'SOLUSD', 'DOTUSD'];
-  const [symbolIndex, setSymbolIndex] = useState<number>(0);
+  const [_symbolIndex, setSymbolIndex] = useState<number>(0);
 
   // Initialize live mode based on config
   useEffect(() => {

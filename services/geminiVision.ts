@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { GeminiAnalysisResponse, Direction } from '../types';
+import { configManager } from '../config';
 
 export class GeminiVisionService {
   private apiKey: string;
@@ -140,8 +141,6 @@ export class GeminiVisionService {
       }
 
       // This is a simplified parser - in production, you'd want more robust parsing
-      const lines = analysisText.split('\n');
-      
       // Extract key information using regex patterns
       const directionMatch = analysisText.match(/(LONG|SHORT|FLAT)/i);
       const entryMatch = analysisText.match(/entry[:\s]*\$?([0-9,]+\.?[0-9]*)/i);
@@ -325,5 +324,5 @@ export class GeminiVisionService {
 
 // Export singleton instance
 export const geminiVisionService = new GeminiVisionService(
-  process.env.GEMINI_API_KEY || 'demo-key'
+  configManager.getGeminiApiKey() || 'demo-key'
 );

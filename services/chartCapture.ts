@@ -172,7 +172,7 @@ export class ChartCaptureService {
   /**
    * Extract technical indicators from chart
    */
-  private extractTechnicalIndicators(element: HTMLElement) {
+  private extractTechnicalIndicators(_element: HTMLElement) {
     // In a real implementation, this would extract actual indicator values
     // For now, we'll simulate realistic values
     return {

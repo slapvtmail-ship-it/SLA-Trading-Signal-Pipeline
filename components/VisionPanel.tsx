@@ -17,20 +17,21 @@ interface VisionPanelProps {
 }
 
 export const VisionPanel: React.FC<VisionPanelProps> = ({ 
-  chartUrl, 
+  chartUrl: _chartUrl, 
   extractedText, 
   isProcessing, 
   symbol,
   onChartCaptured,
   onAnalysisComplete 
 }) => {
-  const [currentSymbol, setCurrentSymbol] = useState(symbol);
+  const [currentSymbol, _setCurrentSymbol] = useState(symbol);
   const [livePrice, setLivePrice] = useState(0);
   const [priceChange, setPriceChange] = useState(0);
   const [isCapturing, setIsCapturing] = useState(false);
   const [lastCaptureTime, setLastCaptureTime] = useState<string>('');
   const [tradingViewLoaded, setTradingViewLoaded] = useState(false);
   const [useFallback, setUseFallback] = useState(!configManager.isTradingViewEnabled());
+  const [apiKeyStatus, setApiKeyStatus] = useState<string>('');
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const tradingViewScriptRef = useRef<HTMLScriptElement | null>(null);
@@ -41,6 +42,29 @@ export const VisionPanel: React.FC<VisionPanelProps> = ({
   }, []);
 
   const containerId = `tradingview-chart-${sanitizeSymbol(currentSymbol)}`;
+
+  // Check API key status
+  useEffect(() => {
+    const apiKey = configManager.getGeminiApiKey();
+    const isEnabled = configManager.isGeminiEnabled();
+    
+    if (!apiKey || apiKey === 'demo-key') {
+      setApiKeyStatus('No API Key');
+    } else if (apiKey === 'your_gemini_api_key_here') {
+      setApiKeyStatus('Default Key');
+    } else if (apiKey.startsWith('AIza')) {
+      setApiKeyStatus(`✅ Valid Key (${apiKey.substring(0, 8)}...)`);
+    } else {
+      setApiKeyStatus('Invalid Key');
+    }
+    
+    console.log('Gemini API Status:', {
+      hasKey: !!apiKey,
+      keyLength: apiKey?.length || 0,
+      isEnabled,
+      keyPreview: apiKey?.substring(0, 8) + '...'
+    });
+  }, []);
 
   // Initialize TradingView widget
   const initializeTradingViewWidget = useCallback(() => {
@@ -299,6 +323,16 @@ export const VisionPanel: React.FC<VisionPanelProps> = ({
               <div className={`w-2 h-2 rounded-full ${configManager.isLiveDataEnabled() ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
               <span className="text-xs text-slate-400">
                 {configManager.isLiveDataEnabled() ? 'Live' : 'Demo'}
+              </span>
+            </div>
+          </div>
+          
+          {/* API Key Status */}
+          <div className="mb-3 p-2 bg-slate-800 rounded border border-slate-600">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Gemini API:</span>
+              <span className={`font-mono ${apiKeyStatus.includes('✅') ? 'text-green-400' : 'text-yellow-400'}`}>
+                {apiKeyStatus}
               </span>
             </div>
           </div>
