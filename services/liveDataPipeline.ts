@@ -294,7 +294,10 @@ class LiveDataPipeline {
    */
   private async captureChartForAnalysis(symbol: string): Promise<any> {
     try {
-      const result = await chartCaptureService.captureChart(`tradingview-chart-${symbol}`, symbol);
+      // Sanitize symbol for DOM ID (same as VisionPanel)
+      const sanitizedSymbol = symbol.replace(/[^a-zA-Z0-9]/g, '-');
+      const elementId = `tradingview-chart-${sanitizedSymbol}`;
+      const result = await chartCaptureService.captureChart(elementId, symbol);
       return result;
     } catch (error) {
       console.warn(`⚠️ Chart capture failed for ${symbol}, using market data only`);

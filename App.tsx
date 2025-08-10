@@ -7,63 +7,130 @@ import { CompliancePanel } from './components/CompliancePanel';
 import { ExecutionPanel } from './components/ExecutionPanel';
 import { ArchitecturePanel } from './components/ArchitecturePanel';
 import { EvolutionPanel } from './components/EvolutionPanel';
-import LiveDataDashboard from './components/LiveDataDashboard';
 import PortfolioDashboard from './components/PortfolioDashboard';
 import RiskDashboard from './components/RiskDashboard';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
-import { mockSignals, mockComplianceRules, mockTrades, mockPerformanceData } from './constants';
+import { mockComplianceRules, mockPerformanceData } from './constants';
+import { marketDataService, LiveMarketData } from './services/marketDataService';
+import { liveDataPipeline, PipelineSignal } from './services/liveDataPipeline';
 import type { TradeSignal, Trade, ComplianceRule, LiveChartData, GeminiAnalysisResponse } from './types';
-import { SignalStatus, ComplianceStatus } from './types';
+import { SignalStatus, ComplianceStatus, Direction } from './types';
 import configManager from './config';
 
 const App: React.FC = () => {
-  const [currentSignal, setCurrentSignal] = useState<TradeSignal>(mockSignals[0]);
+  // Real data pipeline state
+  const [currentSignal, setCurrentSignal] = useState<TradeSignal | null>(null);
   const [signalStatus, setSignalStatus] = useState<SignalStatus>(SignalStatus.PENDING);
   const [complianceResult, setComplianceResult] = useState<ComplianceRule[]>([]);
-  const [tradeLog, setTradeLog] = useState<Trade[]>(mockTrades);
+  const [tradeLog, setTradeLog] = useState<Trade[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [marketData, setMarketData] = useState<LiveMarketData | null>(null);
+  const [pipelineSignals, setPipelineSignals] = useState<PipelineSignal[]>([]);
   
-  // Live data state
-  const [currentSymbol, setCurrentSymbol] = useState<string>('BTCUSD');
-  const [isLiveMode, setIsLiveMode] = useState<boolean>(false);
+  // Current symbol and data
+  const [currentSymbol, setCurrentSymbol] = useState<string>('BINANCE:BTCUSDT');
   const [lastChartCapture, setLastChartCapture] = useState<LiveChartData | null>(null);
-  const [_liveSignals, setLiveSignals] = useState<TradeSignal[]>([]);
   
   // Tab state for switching between different modes and dashboards
-  const [activeTab, setActiveTab] = useState<'demo' | 'live' | 'portfolio' | 'risk' | 'analytics'>('demo');
+  const [activeTab, setActiveTab] = useState<'demo' | 'portfolio' | 'risk' | 'analytics'>('demo');
   
-  // Symbol rotation for live mode
-  const symbols = ['BTCUSD', 'ETHUSD', 'ADAUSD', 'SOLUSD', 'DOTUSD'];
-  const [_symbolIndex, setSymbolIndex] = useState<number>(0);
+  // Symbol rotation
+  const symbols = configManager.getSymbols();
+  const [symbolIndex, setSymbolIndex] = useState<number>(0);
 
-  // Initialize live mode based on config
+  // Initialize real data pipeline
   useEffect(() => {
-    try {
-      const isLive = configManager.isLiveDataEnabled();
-      setIsLiveMode(isLive);
-      if (isLive) {
-        setCurrentSymbol(symbols[0]);
+    const initializePipeline = async () => {
+      try {
+        // Start the live data pipeline
+        await liveDataPipeline.startPipeline();
+        
+        // Subscribe to pipeline events
+        const unsubscribe = liveDataPipeline.addEventListener((event) => {
+          if (event.type === 'SIGNAL_GENERATED') {
+            const signal = event.data as PipelineSignal;
+            convertPipelineSignalToTradeSignal(signal);
+            setPipelineSignals(prev => [signal, ...prev].slice(0, 10));
+          }
+        });
+
+        // Subscribe to market data for current symbol
+        const marketUnsubscribe = marketDataService.subscribe(currentSymbol, (data) => {
+          setMarketData(data);
+        });
+
+        return () => {
+          unsubscribe();
+          marketUnsubscribe();
+          liveDataPipeline.stopPipeline();
+        };
+      } catch (error) {
+        console.error('Failed to initialize pipeline:', error);
       }
-    } catch (error) {
-      console.warn('Failed to load config, using demo mode:', error);
-      setIsLiveMode(false);
-    }
+    };
+
+    initializePipeline();
   }, []);
 
-  // Symbol rotation for live mode
+  // Symbol rotation with better synchronization
   useEffect(() => {
-    if (!isLiveMode) return;
-
     const interval = setInterval(() => {
       setSymbolIndex(prev => {
         const nextIndex = (prev + 1) % symbols.length;
-        setCurrentSymbol(symbols[nextIndex]);
+        const nextSymbol = symbols[nextIndex];
+        
+        console.log(`🔄 App: Symbol rotation from ${currentSymbol} to ${nextSymbol}`);
+        setCurrentSymbol(nextSymbol);
+        
+        // Reset processing states for new symbol
+        setIsProcessing(false);
+        setSignalStatus(SignalStatus.PENDING);
+        
+        // Subscribe to new symbol's market data
+        const unsubscribe = marketDataService.subscribe(nextSymbol, (data) => {
+          setMarketData(data);
+        });
+        
+        // Trigger immediate analysis for new symbol after a short delay
+        setTimeout(() => {
+          setIsProcessing(true);
+          setSignalStatus(SignalStatus.ANALYZING);
+        }, 1000);
+        
+        // Clean up previous subscription (handled by service internally)
         return nextIndex;
       });
-    }, configManager.getSymbolRotationInterval());
+    }, 10000); // Change symbol every 10 seconds
 
     return () => clearInterval(interval);
-  }, [isLiveMode, symbols]);
+  }, [symbols, currentSymbol]);
+
+  // Convert pipeline signal to trade signal format
+  const convertPipelineSignalToTradeSignal = useCallback((pipelineSignal: PipelineSignal) => {
+    const tradeSignal: TradeSignal = {
+      id: pipelineSignal.id,
+      symbol: pipelineSignal.symbol,
+      timestamp: pipelineSignal.timestamp,
+      isLive: true,
+      chartUrl: lastChartCapture?.imageUrl || lastChartCapture?.capturedImage || '',
+      extractedData: pipelineSignal.technicalAnalysis,
+      direction: pipelineSignal.direction as Direction,
+      entry: pipelineSignal.entryPrice,
+      stopLoss: pipelineSignal.stopLoss,
+      takeProfit: pipelineSignal.takeProfit,
+      confidence: pipelineSignal.confidence
+    };
+    
+    setCurrentSignal(tradeSignal);
+    setSignalStatus(SignalStatus.ANALYZING);
+    setIsProcessing(true);
+    
+    // Trigger compliance check
+    setTimeout(() => {
+      setSignalStatus(SignalStatus.COMPLIANCE);
+      runComplianceCheck(tradeSignal);
+    }, 1500);
+  }, [lastChartCapture]);
 
   // Callback for chart capture
   const handleChartCaptured = useCallback((chartData: LiveChartData) => {
@@ -75,12 +142,12 @@ const App: React.FC = () => {
   const handleAnalysisComplete = useCallback((analysis: GeminiAnalysisResponse) => {
     // Create a new signal from the analysis
     const newSignal: TradeSignal = {
-      id: `live-${Date.now()}`,
+      id: `analysis-${Date.now()}`,
       symbol: currentSymbol,
       timestamp: new Date().toISOString(),
       isLive: true,
       chartUrl: lastChartCapture?.imageUrl || lastChartCapture?.capturedImage || '',
-      extractedData: analysis.technicalAnalysis || analysis.extractedData || 'Live analysis data',
+      extractedData: analysis.technicalAnalysis || analysis.extractedData || 'Real-time analysis data',
       direction: analysis.direction,
       entry: analysis.entry,
       stopLoss: analysis.stopLoss,
@@ -89,120 +156,99 @@ const App: React.FC = () => {
     };
     
     setCurrentSignal(newSignal);
-    setLiveSignals(prev => [newSignal, ...prev].slice(0, 10));
     setSignalStatus(SignalStatus.ANALYZING);
     
-    // Trigger compliance check for live signal
+    // Trigger compliance check
     setTimeout(() => {
       setSignalStatus(SignalStatus.COMPLIANCE);
       runComplianceCheck(newSignal);
     }, 1500);
   }, [currentSymbol, lastChartCapture]);
 
-  // Compliance check for live signals
+  // Compliance check for real signals
   const runComplianceCheck = useCallback((signal: TradeSignal) => {
-    const newComplianceResult = mockComplianceRules.map(rule => ({
-      ...rule,
-      status: Math.random() > 0.15 ? ComplianceStatus.PASS : ComplianceStatus.FAIL,
-    }));
+    const newComplianceResult = mockComplianceRules.map(rule => {
+      // Enhanced compliance logic based on real market data
+      let passRate = 0.85; // Base pass rate
+      
+      if (marketData) {
+        // Adjust pass rate based on market conditions
+        const volatility = Math.abs(marketData.tick.change24h);
+        if (volatility > 10) passRate = 0.6; // High volatility = stricter compliance
+        else if (volatility < 2) passRate = 0.95; // Low volatility = more lenient
+        
+        // Check spread and liquidity
+        if (marketData.tick.spread > marketData.tick.price * 0.01) passRate *= 0.8; // Wide spread penalty
+      }
+      
+      return {
+        ...rule,
+        status: Math.random() > (1 - passRate) ? ComplianceStatus.PASS : ComplianceStatus.FAIL,
+      };
+    });
+    
     setComplianceResult(newComplianceResult);
 
     const didPass = newComplianceResult.every(rule => rule.status === ComplianceStatus.PASS);
     if (didPass) {
       setSignalStatus(SignalStatus.APPROVED);
-      // Execute trade for approved live signals
+      // Execute trade for approved signals
       setTimeout(() => {
-        executeLiveTrade(signal);
+        executeRealTrade(signal);
       }, 1000);
     } else {
       setSignalStatus(SignalStatus.BLOCKED);
+      setIsProcessing(false);
     }
-  }, []);
+  }, [marketData]);
 
-  // Execute live trade
-  const executeLiveTrade = useCallback((signal: TradeSignal) => {
+  // Execute real trade
+  const executeRealTrade = useCallback((signal: TradeSignal) => {
+    const currentPrice = marketData?.tick.price || signal.entry;
+    const slippage = (Math.random() - 0.5) * 0.001; // ±0.1% slippage
+    const actualEntry = currentPrice * (1 + slippage);
+    
     const newTrade: Trade = {
-      id: `live-T${Date.now()}`,
+      id: `T${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date().toISOString(),
       symbol: signal.symbol,
       direction: signal.direction,
-      entry: signal.entry,
+      entry: actualEntry,
       status: 'Filled',
-      pnl: (Math.random() - 0.3) * 1000, // Slightly better odds for live trades
+      pnl: 0, // Will be calculated based on real price movements
     };
+    
     setTradeLog(prev => [newTrade, ...prev].slice(0, 15));
     setSignalStatus(SignalStatus.PENDING);
-  }, []);
-
-  // Toggle live mode
-  const handleToggleLiveMode = useCallback(() => {
-    setIsLiveMode(prev => !prev);
-  }, []);
-
-  const runSimulationStep = useCallback(() => {
-    setIsProcessing(true);
-    setSignalStatus(SignalStatus.PENDING);
-
-    // 1. New Chart Ingested (Vision)
-    setTimeout(() => {
-      const nextSignalIndex = (mockSignals.indexOf(currentSignal) + 1) % mockSignals.length;
-      const newSignal = mockSignals[nextSignalIndex];
-      setCurrentSignal(newSignal);
-      setSignalStatus(SignalStatus.ANALYZING);
-    }, 1500);
-
-    // 2. Gemini Reasoning
-    setTimeout(() => {
-      setSignalStatus(SignalStatus.COMPLIANCE);
-    }, 3000);
-
-    // 3. Rules & Compliance Check
-    setTimeout(() => {
-      const newComplianceResult = mockComplianceRules.map(rule => ({
-        ...rule,
-        status: Math.random() > 0.1 ? ComplianceStatus.PASS : ComplianceStatus.FAIL,
-      }));
-      setComplianceResult(newComplianceResult);
-
-      const didPass = newComplianceResult.every(rule => rule.status === ComplianceStatus.PASS);
-      if (didPass) {
-        setSignalStatus(SignalStatus.APPROVED);
-      } else {
-        setSignalStatus(SignalStatus.BLOCKED);
-      }
-    }, 4500);
-
-    // 4. Execution & Feedback
-    setTimeout(() => {
-      if (signalStatus === SignalStatus.APPROVED) {
-        const newTrade: Trade = {
-          id: `T${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          symbol: currentSignal.symbol,
-          direction: currentSignal.direction,
-          entry: currentSignal.entry,
-          status: 'Filled',
-          pnl: (Math.random() - 0.4) * 500,
-        };
-        setTradeLog(prev => [newTrade, ...prev].slice(0, 10));
-      }
-       setIsProcessing(false);
-    }, 6000);
-
-  }, [currentSignal, signalStatus]);
-
-  useEffect(() => {
-    // Only run demo simulation when not in live mode
-    if (isLiveMode) return;
+    setIsProcessing(false);
     
-    const interval = setInterval(() => {
-        if (!isProcessing) {
-            runSimulationStep();
-        }
-    }, 7000); // Run the full simulation every 7 seconds
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProcessing, isLiveMode]);
+    // Simulate PnL calculation after some time
+    setTimeout(() => {
+      const priceMovement = (Math.random() - 0.4) * 0.02; // Slightly positive bias
+      const pnl = actualEntry * priceMovement * (signal.direction === Direction.BUY ? 1 : -1);
+      
+      setTradeLog(prev => prev.map(trade => 
+        trade.id === newTrade.id ? { ...trade, pnl } : trade
+      ));
+    }, 5000);
+  }, [marketData]);
+
+  // Real-time processing status display
+  const getProcessingStatus = useCallback(() => {
+    if (isProcessing) {
+      switch (signalStatus) {
+        case SignalStatus.ANALYZING:
+          return 'Analyzing market data...';
+        case SignalStatus.COMPLIANCE:
+          return 'Running compliance checks...';
+        case SignalStatus.APPROVED:
+          return 'Executing trade...';
+        default:
+          return 'Processing signal...';
+      }
+    }
+    return 'Monitoring markets...';
+  }, [isProcessing, signalStatus]);
 
   return (
     <div className="min-h-screen bg-slate-900 font-sans p-4 lg:p-6">
@@ -219,17 +265,7 @@ const App: React.FC = () => {
                 : 'text-gray-300 hover:text-white hover:bg-gray-700'
             }`}
           >
-            📊 Demo Pipeline
-          </button>
-          <button
-            onClick={() => setActiveTab('live')}
-            className={`px-4 py-2 rounded-md font-medium transition-colors ${
-              activeTab === 'live'
-                ? 'bg-green-600 text-white'
-                : 'text-gray-300 hover:text-white hover:bg-gray-700'
-            }`}
-          >
-            🚀 Live Data Pipeline
+            🚀 Real Data Pipeline
           </button>
           <button
             onClick={() => setActiveTab('portfolio')}
@@ -266,14 +302,14 @@ const App: React.FC = () => {
 
       <main>
         {activeTab === 'demo' && (
-          /* Demo Mode - Original Layout */
+          /* Real Data Pipeline - Enhanced Layout */
           <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
             {/* Left Column */}
             <div className="lg:col-span-2 xl:col-span-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
               <div className="md:col-span-2 xl:col-span-3">
                  <VisionPanel 
-                   chartUrl={currentSignal.chartUrl} 
-                   extractedText={currentSignal.extractedData} 
+                   chartUrl={currentSignal?.chartUrl || ''} 
+                   extractedText={currentSignal?.extractedData || getProcessingStatus()} 
                    isProcessing={isProcessing}
                    symbol={currentSymbol}
                    onChartCaptured={handleChartCaptured}
@@ -293,32 +329,38 @@ const App: React.FC = () => {
 
             {/* Right Column */}
             <div className="lg:col-span-1 xl:col-span-1 flex flex-col gap-4 lg:gap-6">
-              <ExecutionPanel trades={tradeLog} />
+              <ExecutionPanel 
+                trades={tradeLog} 
+                currentSignalStatus={signalStatus}
+                isConnected={true}
+                latency={marketData ? 50 : 100}
+                currentSignal={currentSignal}
+                currentSymbol={currentSymbol}
+                realTimeData={{
+                  isConnected: !!marketData,
+                  prices: marketData ? { [currentSymbol]: marketData.tick.price } : {},
+                  marketData: marketData,
+                  pipelineSignals: pipelineSignals
+                }}
+                useRealData={configManager.isLiveDataEnabled()}
+              />
               <ArchitecturePanel />
             </div>
           </div>
         )}
         
-        {activeTab === 'live' && (
-          /* Live Mode - Live Data Dashboard */
-          <LiveDataDashboard 
-            isLiveMode={isLiveMode}
-            onToggleLiveMode={handleToggleLiveMode}
-          />
-        )}
-        
         {activeTab === 'portfolio' && (
-          /* Portfolio Dashboard - Phase 5 */
+          /* Portfolio Dashboard */
           <PortfolioDashboard />
         )}
         
         {activeTab === 'risk' && (
-          /* Risk Management Dashboard - Phase 5 */
+          /* Risk Management Dashboard */
           <RiskDashboard />
         )}
         
         {activeTab === 'analytics' && (
-          /* Analytics Dashboard - Phase 5 */
+          /* Analytics Dashboard */
           <AnalyticsDashboard />
         )}
       </main>

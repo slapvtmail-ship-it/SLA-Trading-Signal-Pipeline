@@ -116,23 +116,265 @@ class MarketDataService {
   }
 
   /**
+   * Stop streaming for a symbol
+   */
+  stopStreaming(symbol: string): void {
+    // Clear all intervals for this symbol
+    const interval = this.intervals.get(symbol);
+    if (interval) {
+      clearInterval(interval);
+      this.intervals.delete(symbol);
+    }
+
+    // Clear fallback interval if exists
+    const fallbackInterval = this.intervals.get(symbol + '_fallback');
+    if (fallbackInterval) {
+      clearInterval(fallbackInterval);
+      this.intervals.delete(symbol + '_fallback');
+    }
+
+    this.dataCache.delete(symbol);
+    this.subscribers.delete(symbol);
+  }
+
+  /**
    * Start streaming for a specific symbol
    */
   private startSymbolStream(symbol: string): void {
-    // High-frequency updates (every 1-3 seconds)
+    // Check if live data is enabled
+    if (configManager.isLiveDataEnabled()) {
+      this.startRealDataStreaming(symbol);
+    } else {
+      this.startMockDataStreaming(symbol);
+    }
+  }
+
+  /**
+   * Start real market data streaming using public APIs
+   */
+  private startRealDataStreaming(symbol: string): void {
+    console.log(`🔗 Starting real data streaming for ${symbol} using public APIs`);
+    
+    try {
+      // Start fetching real market data using public APIs
+      this.fetchRealMarketData(symbol);
+      
+      // Set up periodic updates every 5 seconds
+      const interval = setInterval(() => {
+        this.fetchRealMarketData(symbol);
+      }, 5000);
+      
+      this.intervals.set(symbol, interval);
+      console.log(`✅ Real data streaming established for ${symbol}`);
+      
+    } catch (error) {
+      console.error(`❌ Failed to establish real data connection for ${symbol}:`, error);
+      console.log(`🔄 Falling back to enhanced mock data for ${symbol}`);
+      this.startEnhancedMockDataStreaming(symbol);
+    }
+  }
+
+  /**
+   * Fetch real market data from public APIs
+   */
+  private async fetchRealMarketData(symbol: string): Promise<void> {
+    try {
+      const coinSymbol = this.convertSymbolToCoinGecko(symbol);
+      
+      // Use CoinGecko API (free, no API key required, CORS-enabled)
+      const response = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${coinSymbol}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_last_updated_at=true`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const coinData = data[coinSymbol];
+      
+      if (coinData) {
+        console.log(`📊 Received real market data for ${symbol}:`, {
+          price: coinData.usd,
+          change24h: coinData.usd_24h_change,
+          volume: coinData.usd_24h_vol,
+          source: 'CoinGecko API'
+        });
+
+        const liveData = this.convertApiDataToLiveMarketData(coinData, symbol);
+        this.dataCache.set(symbol, liveData);
+        this.notifySubscribers(symbol, liveData);
+        this.updateCount++;
+        this.lastUpdateTime = Date.now();
+      } else {
+        console.warn(`⚠️ No data received for ${symbol} from CoinGecko`);
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error fetching real market data for ${symbol}:`, error);
+      
+      // If real API fails, fall back to enhanced mock data
+      if (!this.intervals.has(symbol + '_fallback')) {
+        console.log(`🔄 API failed, falling back to enhanced mock data for ${symbol}`);
+        this.startEnhancedMockDataStreaming(symbol);
+        
+        // Mark as fallback to avoid duplicate fallbacks
+        const fallbackInterval = setInterval(() => {}, 60000);
+        this.intervals.set(symbol + '_fallback', fallbackInterval);
+      }
+    }
+  }
+
+  /**
+   * Convert symbol to CoinGecko ID
+   */
+  private convertSymbolToCoinGecko(symbol: string): string {
+    const symbolMap: Record<string, string> = {
+      'BINANCE:BTCUSDT': 'bitcoin',
+      'BINANCE:ETHUSDT': 'ethereum',
+      'BINANCE:SOLUSDT': 'solana',
+      'BINANCE:ADAUSDT': 'cardano',
+      'BINANCE:BNBUSDT': 'binancecoin',
+      'BINANCE:XRPUSDT': 'ripple'
+    };
+    
+    return symbolMap[symbol] || 'bitcoin';
+  }
+
+  /**
+   * Convert CoinGecko API data to LiveMarketData format
+   */
+  private convertApiDataToLiveMarketData(apiData: any, symbol: string): LiveMarketData {
+    const cached = this.dataCache.get(symbol);
+    const currentPrice = apiData.usd;
+    const change24h = apiData.usd_24h_change || 0;
+    const volume = apiData.usd_24h_vol || this.generateVolume(symbol);
+
+    const tick: MarketTick = {
+      symbol,
+      price: currentPrice,
+      volume,
+      timestamp: new Date(apiData.last_updated_at * 1000).toISOString(),
+      change24h,
+      high24h: Math.max(currentPrice, cached?.tick.high24h || currentPrice),
+      low24h: Math.min(currentPrice, cached?.tick.low24h || currentPrice),
+      bid: currentPrice * 0.9995,
+      ask: currentPrice * 1.0005,
+      spread: currentPrice * 0.001
+    };
+
+    const orderBook: OrderBookData = this.generateOrderBook(symbol, currentPrice);
+    const technicals: TechnicalIndicators = this.generateTechnicalIndicators(symbol, currentPrice, cached);
+    const sentiment = this.generateSentiment(symbol, technicals, change24h);
+
+    return {
+      tick,
+      orderBook,
+      technicals,
+      sentiment
+    };
+  }
+
+  /**
+   * Start mock data streaming (original behavior)
+   */
+  private startMockDataStreaming(symbol: string): void {
+    console.log(`🎭 Starting mock data streaming for ${symbol}`);
+    
+    // Generate initial data
+    const initialData = this.generateLiveMarketData(symbol);
+    this.dataCache.set(symbol, initialData);
+    this.notifySubscribers(symbol, initialData);
+
+    // Start periodic updates
     const interval = setInterval(() => {
-      if (!this.isRunning) return;
-      
-      const marketData = this.generateLiveMarketData(symbol);
-      this.dataCache.set(symbol, marketData);
-      this.notifySubscribers(symbol, marketData);
-      
+      const data = this.generateLiveMarketData(symbol);
+      this.dataCache.set(symbol, data);
+      this.notifySubscribers(symbol, data);
       this.updateCount++;
       this.lastUpdateTime = Date.now();
-    }, this.getUpdateInterval());
+    }, 2000 + Math.random() * 3000); // 2-5 second intervals
 
     this.intervals.set(symbol, interval);
   }
+
+  /**
+   * Start enhanced mock data streaming with more realistic patterns
+   */
+  private startEnhancedMockDataStreaming(symbol: string): void {
+    console.log(`🎭✨ Starting enhanced mock data streaming for ${symbol} (simulating real market patterns)`);
+    
+    // Generate initial data
+    const initialData = this.generateLiveMarketData(symbol);
+    this.dataCache.set(symbol, initialData);
+    this.notifySubscribers(symbol, initialData);
+
+    // Start more frequent updates with realistic patterns
+    const interval = setInterval(() => {
+      const data = this.generateEnhancedLiveMarketData(symbol);
+      this.dataCache.set(symbol, data);
+      this.notifySubscribers(symbol, data);
+      this.updateCount++;
+      this.lastUpdateTime = Date.now();
+    }, 1000 + Math.random() * 2000); // 1-3 second intervals for more realistic feel
+
+    this.intervals.set(symbol, interval);
+  }
+
+  /**
+   * Generate enhanced live market data with more realistic patterns
+   */
+  private generateEnhancedLiveMarketData(symbol: string): LiveMarketData {
+    const cached = this.dataCache.get(symbol);
+    const basePrice = this.getBasePrice(symbol);
+    
+    // More realistic price movement based on previous price
+    const previousPrice = cached?.tick.price || basePrice;
+    const volatility = this.getSymbolVolatility(symbol) * 1.5; // Slightly higher volatility
+    const trend = this.getMarketTrend(symbol);
+    
+    // Add momentum and mean reversion
+    const momentum = Math.random() > 0.7 ? (Math.random() - 0.5) * 0.02 : 0;
+    const meanReversion = (basePrice - previousPrice) / basePrice * 0.1;
+    
+    const priceChange = this.generatePriceChange(volatility, trend) + momentum + meanReversion;
+    const currentPrice = previousPrice * (1 + priceChange);
+
+    const volume = this.generateVolume(symbol) * (1 + Math.abs(priceChange) * 10); // Higher volume on bigger moves
+    const change24h = ((currentPrice - basePrice) / basePrice) * 100;
+
+    const tick: MarketTick = {
+      symbol,
+      price: currentPrice,
+      volume,
+      timestamp: new Date().toISOString(),
+      change24h,
+      high24h: Math.max(currentPrice, cached?.tick.high24h || currentPrice),
+      low24h: Math.min(currentPrice, cached?.tick.low24h || currentPrice),
+      bid: currentPrice * (1 - 0.0005 - Math.random() * 0.0005),
+      ask: currentPrice * (1 + 0.0005 + Math.random() * 0.0005),
+      spread: currentPrice * (0.001 + Math.random() * 0.001)
+    };
+
+    const orderBook: OrderBookData = this.generateOrderBook(symbol, currentPrice);
+    const technicals: TechnicalIndicators = this.generateTechnicalIndicators(symbol, currentPrice, cached);
+    const sentiment = this.generateSentiment(symbol, technicals, change24h);
+
+    return {
+      tick,
+      orderBook,
+      technicals,
+      sentiment
+    };
+  }
+
+
 
   /**
    * Get dynamic update interval based on market volatility

@@ -522,7 +522,7 @@ const AnalyticsDashboard: React.FC = () => {
                 <div className="h-64 flex items-end space-x-1">
                   {chartData.equityCurve.map((point, index) => (
                     <div
-                      key={index}
+                      key={`${point.date}-${index}`}
                       className="bg-blue-600 rounded-t"
                       style={{
                         height: `${(point.value - Math.min(...chartData.equityCurve.map(p => p.value))) / 

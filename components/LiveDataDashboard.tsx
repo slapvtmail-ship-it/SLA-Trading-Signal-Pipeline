@@ -370,7 +370,7 @@ const LiveDataDashboard: React.FC<LiveDataDashboardProps> = ({
                   <div className="flex flex-wrap gap-1 mt-1">
                     {selectedMarketData.sentiment.signals.map((signal, index) => (
                       <span
-                        key={index}
+                        key={`${signal}-${index}`}
                         className="px-2 py-1 bg-gray-700 text-xs rounded text-gray-300"
                       >
                         {signal}

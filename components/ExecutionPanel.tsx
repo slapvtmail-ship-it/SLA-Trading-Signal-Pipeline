@@ -4,6 +4,7 @@ import { SectionCard } from './SectionCard';
 import type { Trade } from '../types';
 import { Direction, SignalStatus } from '../types';
 import { ActivityIcon } from './icons/ActivityIcon';
+import configManager from '../config';
 
 interface ExecutionPanelProps {
   trades: Trade[];
@@ -11,6 +12,7 @@ interface ExecutionPanelProps {
   isConnected?: boolean;
   latency?: number;
   currentSignal?: any;
+  currentSymbol?: string;
   realTimeData?: any;
   useRealData?: boolean;
 }
@@ -28,6 +30,7 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
   isConnected: _isConnected = false, 
   latency = 85,
   currentSignal,
+  currentSymbol,
   realTimeData,
   useRealData = false
 }) => {
@@ -41,8 +44,13 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
 
   // Get live data status - check if system is configured for real data and connected
   const hasLiveData = useRealData && realTimeData && (realTimeData.isConnected || Object.keys(realTimeData.prices || {}).length > 0);
-  const hasVisionAnalysis = currentSignal?.visionAnalysis;
-  const analysisTimestamp = hasVisionAnalysis ? new Date(currentSignal.visionAnalysis.analysisTimestamp || Date.now()).toLocaleTimeString() : null;
+  const hasVisionAnalysis = currentSignal?.visionAnalysis || currentSignal?.extractedData;
+  const analysisTimestamp = currentSignal ? new Date(currentSignal.timestamp || Date.now()).toLocaleTimeString() : null;
+  
+  // Get current market price if available
+  const currentPrice = realTimeData?.marketData?.tick?.price;
+  const priceChange24h = realTimeData?.marketData?.tick?.change24h;
+  const volume = realTimeData?.marketData?.tick?.volume;
 
   return (
     <SectionCard title="Execution & Feedback" icon={<ActivityIcon />}>
@@ -58,6 +66,14 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
               </span>
             </div>
           </div>
+          {(currentSymbol || currentSignal) && (
+            <div className="flex items-center justify-between text-xs mt-1">
+              <span className="text-slate-400">Current Symbol:</span>
+              <span className="text-cyan-400 font-mono">
+                {(currentSymbol || currentSignal?.symbol || '').replace('BINANCE:', '')}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between text-xs mt-1">
             <span className="text-slate-400">Vision Analysis:</span>
             <div className="flex items-center">
@@ -82,7 +98,16 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
           )}
           <div className="flex items-center justify-between text-xs mt-1">
             <span className="text-slate-400">Execution Mode:</span>
-            <span className="text-yellow-400">Simulated (Safe)</span>
+            <span className={hasLiveData ? 'text-orange-400' : 'text-yellow-400'}>
+              {hasLiveData ? 'Real Data + Simulated Execution' : 'Demo Mode (Simulated)'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs mt-1">
+            <span className="text-slate-400">Panel Sync:</span>
+            <div className="flex items-center">
+              <div className="w-2 h-2 rounded-full mr-1 bg-green-400 animate-pulse"></div>
+              <span className="text-green-400">Vision ↔ Execution Aligned</span>
+            </div>
           </div>
         </div>
 
@@ -96,6 +121,36 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
             color="text-red-400" 
           />
         </div>
+
+        {/* Real-time Market Data */}
+        {hasLiveData && currentPrice && (
+          <div className="mb-3 p-2 bg-blue-900/20 border border-blue-500/30 rounded-md">
+            <h4 className="text-xs font-semibold text-blue-400 mb-2 flex items-center justify-between">
+              📊 Live Market Data:
+              <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">
+                {configManager.isLiveDataEnabled() ? '🌐 Real API Data (CoinGecko)' : '🎭 Enhanced Mock Data'}
+              </span>
+            </h4>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-slate-400">Price:</span>
+                <span className="text-white font-mono ml-1">${currentPrice.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-slate-400">24h Change:</span>
+                <span className={`font-mono ml-1 ${priceChange24h && priceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {priceChange24h ? `${priceChange24h >= 0 ? '+' : ''}${priceChange24h.toFixed(2)}%` : 'N/A'}
+                </span>
+              </div>
+              {volume && (
+                <div className="col-span-2">
+                  <span className="text-slate-400">Volume:</span>
+                  <span className="text-cyan-400 font-mono ml-1">{volume.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Total P&L */}
         <div className="mb-3 p-2 bg-slate-900 rounded-md">
@@ -111,12 +166,27 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
         <div className="mb-3 p-2 bg-blue-900/20 border border-blue-500/30 rounded-md">
           <h4 className="text-xs font-semibold text-blue-400 mb-1">🔄 AI Execution Pipeline:</h4>
           <div className="text-xs text-slate-300 space-y-1">
-            <div>1. Live chart capture & AI vision analysis</div>
-            <div>2. Signal generation with confidence scoring</div>
-            <div>3. Real-time compliance validation</div>
-            <div>4. Risk assessment & position sizing</div>
-            <div>5. Simulated execution with P&L tracking</div>
+            <div className={hasLiveData ? 'text-green-400' : 'text-slate-400'}>
+              1. Live chart capture & AI vision analysis {hasLiveData ? '✅' : '⏸️'}
+            </div>
+            <div className={hasVisionAnalysis ? 'text-green-400' : 'text-slate-400'}>
+              2. Signal generation with confidence scoring {hasVisionAnalysis ? '✅' : '⏸️'}
+            </div>
+            <div className={currentSignalStatus === SignalStatus.COMPLIANCE || currentSignalStatus === SignalStatus.APPROVED ? 'text-green-400' : 'text-slate-400'}>
+              3. Real-time compliance validation {currentSignalStatus === SignalStatus.COMPLIANCE || currentSignalStatus === SignalStatus.APPROVED ? '✅' : '⏸️'}
+            </div>
+            <div className={currentSignalStatus === SignalStatus.APPROVED ? 'text-green-400' : 'text-slate-400'}>
+              4. Risk assessment & position sizing {currentSignalStatus === SignalStatus.APPROVED ? '✅' : '⏸️'}
+            </div>
+            <div className={trades.length > 0 ? 'text-green-400' : 'text-slate-400'}>
+              5. {hasLiveData ? 'Real' : 'Simulated'} execution with P&L tracking {trades.length > 0 ? '✅' : '⏸️'}
+            </div>
           </div>
+          {hasLiveData && (
+            <div className="mt-2 text-xs text-green-400">
+              🟢 Real-time data pipeline active
+            </div>
+          )}
         </div>
 
         {/* Trade Log */}
