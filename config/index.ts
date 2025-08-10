@@ -30,6 +30,13 @@ class ConfigManager {
 
   constructor() {
     this.config = this.loadConfig();
+    console.log('🔧 ConfigManager: Configuration loaded:', {
+      geminiEnabled: this.config.gemini.enabled,
+      liveDataEnabled: this.config.liveData.enabled,
+      isLiveDataEnabled: this.isLiveDataEnabled(),
+      demoMode: this.getDemoMode(),
+      geminiApiKey: this.config.gemini.apiKey ? `${this.config.gemini.apiKey.substring(0, 10)}...` : 'NOT_SET'
+    });
   }
 
   private loadConfig(): AppConfig {

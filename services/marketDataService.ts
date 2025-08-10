@@ -278,14 +278,7 @@ class MarketDataService {
 
 
 
-  /**
-   * Get dynamic update interval based on market volatility
-   */
-  private getUpdateInterval(): number {
-    const baseInterval = 2000; // 2 seconds
-    const volatilityFactor = Math.random() * 0.5 + 0.75; // 0.75 - 1.25
-    return Math.floor(baseInterval * volatilityFactor);
-  }
+
 
   /**
    * Subscribe to real-time data for a symbol

@@ -5,6 +5,7 @@ import type { Trade } from '../types';
 import { Direction, SignalStatus } from '../types';
 import { ActivityIcon } from './icons/ActivityIcon';
 import configManager from '../config';
+import { marketDataService } from '../services/marketDataService';
 
 interface ExecutionPanelProps {
   trades: Trade[];
@@ -44,6 +45,17 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
 
   // Get live data status - check if system is configured for real data and connected
   const hasLiveData = useRealData && realTimeData && (realTimeData.isConnected || Object.keys(realTimeData.prices || {}).length > 0);
+  
+  // Debug logging for demo mode investigation
+  console.log('🔍 ExecutionPanel Debug:', {
+    useRealData,
+    realTimeDataExists: !!realTimeData,
+    isConnected: realTimeData?.isConnected,
+    pricesCount: Object.keys(realTimeData?.prices || {}).length,
+    hasLiveData,
+    configLiveDataEnabled: configManager.isLiveDataEnabled(),
+    marketDataServiceRunning: marketDataService?.getStats?.()?.isRunning
+  });
   const hasVisionAnalysis = currentSignal?.visionAnalysis || currentSignal?.extractedData;
   const analysisTimestamp = currentSignal ? new Date(currentSignal.timestamp || Date.now()).toLocaleTimeString() : null;
   
@@ -122,6 +134,36 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
           />
         </div>
 
+        {/* AI Execution Process */}
+        <div className="mb-3 p-2 bg-blue-900/20 border border-blue-500/30 rounded-md">
+          <h4 className="text-xs font-semibold text-blue-400 mb-1">🔄 AI Execution Pipeline:</h4>
+          <div className="text-xs text-slate-300 space-y-1">
+            <div className={hasLiveData ? 'text-green-400' : 'text-slate-400'}>
+              1. Live chart capture & AI vision analysis {hasLiveData ? '✅' : '⏸️'}
+            </div>
+            <div className={hasVisionAnalysis ? 'text-green-400' : 'text-slate-400'}>
+              2. Market data extraction from chart analysis {hasVisionAnalysis ? '✅' : '⏸️'}
+            </div>
+            <div className={hasVisionAnalysis ? 'text-green-400' : 'text-slate-400'}>
+              3. Signal generation with confidence scoring {hasVisionAnalysis ? '✅' : '⏸️'}
+            </div>
+            <div className={currentSignalStatus === SignalStatus.COMPLIANCE || currentSignalStatus === SignalStatus.APPROVED ? 'text-green-400' : 'text-slate-400'}>
+              4. Real-time compliance validation {currentSignalStatus === SignalStatus.COMPLIANCE || currentSignalStatus === SignalStatus.APPROVED ? '✅' : '⏸️'}
+            </div>
+            <div className={currentSignalStatus === SignalStatus.APPROVED ? 'text-green-400' : 'text-slate-400'}>
+              5. Risk assessment & position sizing {currentSignalStatus === SignalStatus.APPROVED ? '✅' : '⏸️'}
+            </div>
+            <div className={trades.length > 0 ? 'text-green-400' : 'text-slate-400'}>
+              6. {hasLiveData ? 'Real' : 'Simulated'} execution with P&L tracking {trades.length > 0 ? '✅' : '⏸️'}
+            </div>
+          </div>
+          {hasLiveData && (
+            <div className="mt-2 text-xs text-green-400">
+              🟢 Real-time data pipeline active
+            </div>
+          )}
+        </div>
+
         {/* Real-time Market Data */}
         {hasLiveData && currentPrice && (
           <div className="mb-3 p-2 bg-blue-900/20 border border-blue-500/30 rounded-md">
@@ -149,6 +191,7 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
                 </div>
               )}
             </div>
+
           </div>
         )}
 
@@ -160,33 +203,6 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
               ${totalPnL >= 0 ? '+' : ''}${totalPnL.toFixed(2)}
             </span>
           </div>
-        </div>
-
-        {/* AI Execution Process */}
-        <div className="mb-3 p-2 bg-blue-900/20 border border-blue-500/30 rounded-md">
-          <h4 className="text-xs font-semibold text-blue-400 mb-1">🔄 AI Execution Pipeline:</h4>
-          <div className="text-xs text-slate-300 space-y-1">
-            <div className={hasLiveData ? 'text-green-400' : 'text-slate-400'}>
-              1. Live chart capture & AI vision analysis {hasLiveData ? '✅' : '⏸️'}
-            </div>
-            <div className={hasVisionAnalysis ? 'text-green-400' : 'text-slate-400'}>
-              2. Signal generation with confidence scoring {hasVisionAnalysis ? '✅' : '⏸️'}
-            </div>
-            <div className={currentSignalStatus === SignalStatus.COMPLIANCE || currentSignalStatus === SignalStatus.APPROVED ? 'text-green-400' : 'text-slate-400'}>
-              3. Real-time compliance validation {currentSignalStatus === SignalStatus.COMPLIANCE || currentSignalStatus === SignalStatus.APPROVED ? '✅' : '⏸️'}
-            </div>
-            <div className={currentSignalStatus === SignalStatus.APPROVED ? 'text-green-400' : 'text-slate-400'}>
-              4. Risk assessment & position sizing {currentSignalStatus === SignalStatus.APPROVED ? '✅' : '⏸️'}
-            </div>
-            <div className={trades.length > 0 ? 'text-green-400' : 'text-slate-400'}>
-              5. {hasLiveData ? 'Real' : 'Simulated'} execution with P&L tracking {trades.length > 0 ? '✅' : '⏸️'}
-            </div>
-          </div>
-          {hasLiveData && (
-            <div className="mt-2 text-xs text-green-400">
-              🟢 Real-time data pipeline active
-            </div>
-          )}
         </div>
 
         {/* Trade Log */}
