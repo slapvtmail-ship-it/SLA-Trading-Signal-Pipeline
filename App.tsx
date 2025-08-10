@@ -8,8 +8,9 @@ import { ExecutionPanel } from './components/ExecutionPanel';
 import { ArchitecturePanel } from './components/ArchitecturePanel';
 import { EvolutionPanel } from './components/EvolutionPanel';
 import { mockSignals, mockComplianceRules, mockTrades, mockPerformanceData } from './constants';
-import type { TradeSignal, Trade, ComplianceRule } from './types';
-import { SignalStatus, ComplianceStatus } from './types';
+import type { TradeSignal, Trade, ComplianceRule, LiveChartData, GeminiAnalysisResponse } from './types';
+import { SignalStatus, ComplianceStatus, Direction } from './types';
+import configManager from './config';
 
 const App: React.FC = () => {
   const [currentSignal, setCurrentSignal] = useState<TradeSignal>(mockSignals[0]);
@@ -17,6 +18,114 @@ const App: React.FC = () => {
   const [complianceResult, setComplianceResult] = useState<ComplianceRule[]>([]);
   const [tradeLog, setTradeLog] = useState<Trade[]>(mockTrades);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  
+  // Live data state
+  const [currentSymbol, setCurrentSymbol] = useState<string>('BTCUSD');
+  const [isLiveMode, setIsLiveMode] = useState<boolean>(false);
+  const [lastChartCapture, setLastChartCapture] = useState<LiveChartData | null>(null);
+  const [liveSignals, setLiveSignals] = useState<TradeSignal[]>([]);
+  
+  // Symbol rotation for live mode
+  const symbols = ['BTCUSD', 'ETHUSD', 'ADAUSD', 'SOLUSD', 'DOTUSD'];
+  const [symbolIndex, setSymbolIndex] = useState<number>(0);
+
+  // Initialize live mode based on config
+  useEffect(() => {
+    try {
+      const isLive = configManager.isLiveDataEnabled();
+      setIsLiveMode(isLive);
+      if (isLive) {
+        setCurrentSymbol(symbols[0]);
+      }
+    } catch (error) {
+      console.warn('Failed to load config, using demo mode:', error);
+      setIsLiveMode(false);
+    }
+  }, []);
+
+  // Symbol rotation for live mode
+  useEffect(() => {
+    if (!isLiveMode) return;
+
+    const interval = setInterval(() => {
+      setSymbolIndex(prev => {
+        const nextIndex = (prev + 1) % symbols.length;
+        setCurrentSymbol(symbols[nextIndex]);
+        return nextIndex;
+      });
+    }, configManager.getSymbolRotationInterval());
+
+    return () => clearInterval(interval);
+  }, [isLiveMode, symbols]);
+
+  // Callback for chart capture
+  const handleChartCaptured = useCallback((chartData: LiveChartData) => {
+    setLastChartCapture(chartData);
+    console.log('Chart captured:', chartData);
+  }, []);
+
+  // Callback for Gemini analysis completion
+  const handleAnalysisComplete = useCallback((analysis: GeminiAnalysisResponse) => {
+    // Create a new signal from the analysis
+    const newSignal: TradeSignal = {
+      id: `live-${Date.now()}`,
+      symbol: currentSymbol,
+      timestamp: new Date().toISOString(),
+      isLive: true,
+      chartUrl: lastChartCapture?.imageUrl || lastChartCapture?.capturedImage || '',
+      extractedData: analysis.technicalAnalysis || analysis.extractedData || 'Live analysis data',
+      direction: analysis.direction,
+      entry: analysis.entry,
+      stopLoss: analysis.stopLoss,
+      takeProfit: analysis.takeProfit,
+      confidence: analysis.confidence
+    };
+    
+    setCurrentSignal(newSignal);
+    setLiveSignals(prev => [newSignal, ...prev].slice(0, 10));
+    setSignalStatus(SignalStatus.ANALYZING);
+    
+    // Trigger compliance check for live signal
+    setTimeout(() => {
+      setSignalStatus(SignalStatus.COMPLIANCE);
+      runComplianceCheck(newSignal);
+    }, 1500);
+  }, [currentSymbol, lastChartCapture]);
+
+  // Compliance check for live signals
+  const runComplianceCheck = useCallback((signal: TradeSignal) => {
+    const newComplianceResult = mockComplianceRules.map(rule => ({
+      ...rule,
+      status: Math.random() > 0.15 ? ComplianceStatus.PASS : ComplianceStatus.FAIL,
+    }));
+    setComplianceResult(newComplianceResult);
+
+    const didPass = newComplianceResult.every(rule => rule.status === ComplianceStatus.PASS);
+    if (didPass) {
+      setSignalStatus(SignalStatus.APPROVED);
+      // Execute trade for approved live signals
+      setTimeout(() => {
+        executeLiveTrade(signal);
+      }, 1000);
+    } else {
+      setSignalStatus(SignalStatus.BLOCKED);
+    }
+  }, []);
+
+  // Execute live trade
+  const executeLiveTrade = useCallback((signal: TradeSignal) => {
+    const newTrade: Trade = {
+      id: `live-T${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      symbol: signal.symbol,
+      direction: signal.direction,
+      entry: signal.entry,
+      status: 'Filled',
+      pnl: (Math.random() - 0.3) * 1000, // Slightly better odds for live trades
+    };
+    setTradeLog(prev => [newTrade, ...prev].slice(0, 15));
+    setSignalStatus(SignalStatus.PENDING);
+  }, []);
 
   const runSimulationStep = useCallback(() => {
     setIsProcessing(true);
@@ -71,6 +180,9 @@ const App: React.FC = () => {
   }, [currentSignal, signalStatus]);
 
   useEffect(() => {
+    // Only run demo simulation when not in live mode
+    if (isLiveMode) return;
+    
     const interval = setInterval(() => {
         if (!isProcessing) {
             runSimulationStep();
@@ -78,7 +190,7 @@ const App: React.FC = () => {
     }, 7000); // Run the full simulation every 7 seconds
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isProcessing]);
+  }, [isProcessing, isLiveMode]);
 
   return (
     <div className="min-h-screen bg-slate-900 font-sans p-4 lg:p-6">
@@ -87,7 +199,14 @@ const App: React.FC = () => {
         {/* Left Column */}
         <div className="lg:col-span-2 xl:col-span-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
           <div className="md:col-span-2 xl:col-span-3">
-             <VisionPanel chartUrl={currentSignal.chartUrl} extractedText={currentSignal.extractedData} isProcessing={isProcessing} />
+             <VisionPanel 
+               chartUrl={currentSignal.chartUrl} 
+               extractedText={currentSignal.extractedData} 
+               isProcessing={isProcessing}
+               symbol={currentSymbol}
+               onChartCaptured={handleChartCaptured}
+               onAnalysisComplete={handleAnalysisComplete}
+             />
           </div>
           <div className="xl:col-span-1">
             <ReasoningPanel signal={currentSignal} status={signalStatus} />

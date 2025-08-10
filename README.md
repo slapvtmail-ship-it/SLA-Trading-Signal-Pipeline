@@ -27,7 +27,7 @@ Watch the [full video demonstration on Google Drive](https://drive.google.com/fi
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/shalinda-j/Gemini-Trading-Signal-Pipeline.git
+   git clone https://github.com/slapvtmail-ship-it/SLA-Trading-Signal-Pipeline.git
    cd Gemini-Trading-Signal-Pipeline
    ```
 
