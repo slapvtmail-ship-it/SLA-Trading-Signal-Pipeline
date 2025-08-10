@@ -7,6 +7,10 @@ import { CompliancePanel } from './components/CompliancePanel';
 import { ExecutionPanel } from './components/ExecutionPanel';
 import { ArchitecturePanel } from './components/ArchitecturePanel';
 import { EvolutionPanel } from './components/EvolutionPanel';
+import LiveDataDashboard from './components/LiveDataDashboard';
+import PortfolioDashboard from './components/PortfolioDashboard';
+import RiskDashboard from './components/RiskDashboard';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import { mockSignals, mockComplianceRules, mockTrades, mockPerformanceData } from './constants';
 import type { TradeSignal, Trade, ComplianceRule, LiveChartData, GeminiAnalysisResponse } from './types';
 import { SignalStatus, ComplianceStatus } from './types';
@@ -24,6 +28,9 @@ const App: React.FC = () => {
   const [isLiveMode, setIsLiveMode] = useState<boolean>(false);
   const [lastChartCapture, setLastChartCapture] = useState<LiveChartData | null>(null);
   const [_liveSignals, setLiveSignals] = useState<TradeSignal[]>([]);
+  
+  // Tab state for switching between different modes and dashboards
+  const [activeTab, setActiveTab] = useState<'demo' | 'live' | 'portfolio' | 'risk' | 'analytics'>('demo');
   
   // Symbol rotation for live mode
   const symbols = ['BTCUSD', 'ETHUSD', 'ADAUSD', 'SOLUSD', 'DOTUSD'];
@@ -127,6 +134,11 @@ const App: React.FC = () => {
     setSignalStatus(SignalStatus.PENDING);
   }, []);
 
+  // Toggle live mode
+  const handleToggleLiveMode = useCallback(() => {
+    setIsLiveMode(prev => !prev);
+  }, []);
+
   const runSimulationStep = useCallback(() => {
     setIsProcessing(true);
     setSignalStatus(SignalStatus.PENDING);
@@ -195,35 +207,120 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 font-sans p-4 lg:p-6">
       <Header />
-      <main className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6 mt-6">
-        {/* Left Column */}
-        <div className="lg:col-span-2 xl:col-span-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-          <div className="md:col-span-2 xl:col-span-3">
-             <VisionPanel 
-               chartUrl={currentSignal.chartUrl} 
-               extractedText={currentSignal.extractedData} 
-               isProcessing={isProcessing}
-               symbol={currentSymbol}
-               onChartCaptured={handleChartCaptured}
-               onAnalysisComplete={handleAnalysisComplete}
-             />
-          </div>
-          <div className="xl:col-span-1">
-            <ReasoningPanel signal={currentSignal} status={signalStatus} />
-          </div>
-          <div className="xl:col-span-1">
-            <CompliancePanel rules={complianceResult} status={signalStatus} />
-          </div>
-          <div className="xl:col-span-1">
-            <EvolutionPanel performanceData={mockPerformanceData} />
-          </div>
+      
+      {/* Tab Navigation */}
+      <div className="mt-6 mb-6">
+        <div className="flex flex-wrap space-x-1 bg-gray-800 rounded-lg p-1">
+          <button
+            onClick={() => setActiveTab('demo')}
+            className={`px-4 py-2 rounded-md font-medium transition-colors ${
+              activeTab === 'demo'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-300 hover:text-white hover:bg-gray-700'
+            }`}
+          >
+            📊 Demo Pipeline
+          </button>
+          <button
+            onClick={() => setActiveTab('live')}
+            className={`px-4 py-2 rounded-md font-medium transition-colors ${
+              activeTab === 'live'
+                ? 'bg-green-600 text-white'
+                : 'text-gray-300 hover:text-white hover:bg-gray-700'
+            }`}
+          >
+            🚀 Live Data Pipeline
+          </button>
+          <button
+            onClick={() => setActiveTab('portfolio')}
+            className={`px-4 py-2 rounded-md font-medium transition-colors ${
+              activeTab === 'portfolio'
+                ? 'bg-purple-600 text-white'
+                : 'text-gray-300 hover:text-white hover:bg-gray-700'
+            }`}
+          >
+            💼 Portfolio
+          </button>
+          <button
+            onClick={() => setActiveTab('risk')}
+            className={`px-4 py-2 rounded-md font-medium transition-colors ${
+              activeTab === 'risk'
+                ? 'bg-red-600 text-white'
+                : 'text-gray-300 hover:text-white hover:bg-gray-700'
+            }`}
+          >
+            🛡️ Risk Management
+          </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`px-4 py-2 rounded-md font-medium transition-colors ${
+              activeTab === 'analytics'
+                ? 'bg-orange-600 text-white'
+                : 'text-gray-300 hover:text-white hover:bg-gray-700'
+            }`}
+          >
+            📈 Analytics
+          </button>
         </div>
+      </div>
 
-        {/* Right Column */}
-        <div className="lg:col-span-1 xl:col-span-1 flex flex-col gap-4 lg:gap-6">
-          <ExecutionPanel trades={tradeLog} />
-          <ArchitecturePanel />
-        </div>
+      <main>
+        {activeTab === 'demo' && (
+          /* Demo Mode - Original Layout */
+          <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
+            {/* Left Column */}
+            <div className="lg:col-span-2 xl:col-span-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+              <div className="md:col-span-2 xl:col-span-3">
+                 <VisionPanel 
+                   chartUrl={currentSignal.chartUrl} 
+                   extractedText={currentSignal.extractedData} 
+                   isProcessing={isProcessing}
+                   symbol={currentSymbol}
+                   onChartCaptured={handleChartCaptured}
+                   onAnalysisComplete={handleAnalysisComplete}
+                 />
+              </div>
+              <div className="xl:col-span-1">
+                <ReasoningPanel signal={currentSignal} status={signalStatus} />
+              </div>
+              <div className="xl:col-span-1">
+                <CompliancePanel rules={complianceResult} status={signalStatus} />
+              </div>
+              <div className="xl:col-span-1">
+                <EvolutionPanel performanceData={mockPerformanceData} />
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="lg:col-span-1 xl:col-span-1 flex flex-col gap-4 lg:gap-6">
+              <ExecutionPanel trades={tradeLog} />
+              <ArchitecturePanel />
+            </div>
+          </div>
+        )}
+        
+        {activeTab === 'live' && (
+          /* Live Mode - Live Data Dashboard */
+          <LiveDataDashboard 
+            isLiveMode={isLiveMode}
+            onToggleLiveMode={handleToggleLiveMode}
+          />
+        )}
+        
+        {activeTab === 'portfolio' && (
+          /* Portfolio Dashboard - Phase 5 */
+          <PortfolioDashboard />
+        )}
+        
+        {activeTab === 'risk' && (
+          /* Risk Management Dashboard - Phase 5 */
+          <RiskDashboard />
+        )}
+        
+        {activeTab === 'analytics' && (
+          /* Analytics Dashboard - Phase 5 */
+          <AnalyticsDashboard />
+        )}
       </main>
     </div>
   );
