@@ -119,6 +119,19 @@ const App: React.FC = () => {
   const convertPipelineSignalToTradeSignal = useCallback((pipelineSignal: PipelineSignal) => {
     console.log('🔄 App: Converting pipeline signal:', pipelineSignal);
     
+    // Map pipeline direction to Direction enum
+    const mapDirection = (pipelineDirection: string): Direction => {
+      switch (pipelineDirection) {
+        case 'BUY':
+          return Direction.LONG;
+        case 'SELL':
+          return Direction.SHORT;
+        case 'HOLD':
+        default:
+          return Direction.FLAT;
+      }
+    };
+    
     const tradeSignal: TradeSignal = {
       id: pipelineSignal.id,
       symbol: pipelineSignal.symbol,
@@ -126,7 +139,7 @@ const App: React.FC = () => {
       isLive: true,
       chartUrl: lastChartCapture?.imageUrl || lastChartCapture?.capturedImage || '',
       extractedData: pipelineSignal.technicalAnalysis,
-      direction: pipelineSignal.direction as Direction,
+      direction: mapDirection(pipelineSignal.direction),
       entry: pipelineSignal.entryPrice,
       stopLoss: pipelineSignal.stopLoss,
       takeProfit: pipelineSignal.takeProfit,
